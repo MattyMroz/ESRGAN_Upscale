@@ -1,15 +1,27 @@
+import argparse
 from pathlib import Path
 from utils.image_resizer import ImageResizer, ResizeMode
 
 
 def main() -> None:
-    input_path: Path = Path("/kaggle/working/ESRGAN_Upscale/output")
-    output_path: Path = Path("/kaggle/working/ESRGAN_Upscale_Output")
-    max_size_mb: float = float(
-        input("Podaj ile MB nie może przekroczyć plik np.: 8: ") or 8)
-    max_size_px: int = int(input(
-        "Podaj długość największej krawędzi w px np.: 1024, 2048, 4096, 8192: ") or 4096)
-    resize_mode: ResizeMode = ResizeMode.LONGEST_EDGE
+    parser = argparse.ArgumentParser(description="Resize images")
+    parser.add_argument("-i", "--input", type=str,
+                        default="/kaggle/working/ESRGAN_Upscale/output", help="Ścieżka wejściowa")
+    parser.add_argument("-o", "--output", type=str,
+                        default="/kaggle/working/ESRGAN_Upscale_Output", help="Ścieżka wyjściowa")
+    parser.add_argument("-mb", "--max_size_mb", type=float,
+                        default=8.0, help="Maksymalny rozmiar pliku w MB")
+    parser.add_argument("-px", "--max_size_px", type=int, default=4096,
+                        help="Maksymalna długość krawędzi w pikselach")
+    parser.add_argument("-m", "--mode", type=str, default="LONGEST_EDGE",
+                        choices=["LONGEST_EDGE", "WIDTH", "HEIGHT"], help="Tryb zmiany rozmiaru")
+    args = parser.parse_args()
+
+    input_path: Path = Path(args.input)
+    output_path: Path = Path(args.output)
+    max_size_mb: float = args.max_size_mb
+    max_size_px: int = args.max_size_px
+    resize_mode: ResizeMode = ResizeMode[args.mode]
 
     if not output_path.exists():
         output_path.mkdir(parents=True)
