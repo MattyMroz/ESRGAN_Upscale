@@ -2,14 +2,13 @@ import logging
 import sys
 from enum import Enum
 from pathlib import Path
-from typing import List
+from typing import List, Tuple
 
-import cv2
-import numpy as np
+from PIL import Image
 import typer
 from rich import print
 from rich.logging import RichHandler
-from rich.progress import BarColumn, Progress, TaskID, TimeRemainingColumn
+from rich.progress import BarColumn, Progress, TimeRemainingColumn
 
 
 class ResizeMode(str, Enum):
@@ -28,6 +27,10 @@ class Resize:
     skip_existing: bool = None
     delete_input: bool = None
     log: logging.Logger = None
+    supported_extensions: List[str] = [
+        '.jpg', '.jpeg', '.png', '.webp', '.bmp', '.eps', '.gif',
+        '.ico', '.msp', '.pcx', '.ppm', '.spider', '.tif', '.tiff', '.xbm', '.xpm'
+    ]
 
     def __init__(
         self,
@@ -62,15 +65,8 @@ class Resize:
         elif not self.output.exists():
             self.output.mkdir(parents=True)
 
-        images: List[Path] = []
-        extensions = [
-            "bmp", "dib", "jpeg", "jpg", "jpe", "jp2", "png", "webp", "pbm", "pgm", "ppm", 
-            "pxm", "pnm", "pfm", "sr", "ras", "tiff", "tif", "exr", "hdr", "pic"
-        ]
-
-        for file in self.input.glob("**/*.*"):
-            if file.suffix.lower()[1:] in extensions:
-                images.append(file)
+        images = list(self.input.rglob("*.*"))
+        images = [img for img in images if img.suffix.lower() in self.supported_extensions]
 
         with Progress(
             "[progress.description]{task.description}",
@@ -80,67 +76,79 @@ class Resize:
         ) as progress:
             task_resizing = progress.add_task("Resizing", total=len(images))
             for idx, img_path in enumerate(images, 1):
-                img_input_path_rel = img_path.relative_to(self.input)
-                output_dir = self.output.joinpath(img_input_path_rel).parent
-                img_output_path_rel = output_dir.joinpath(f"{img_path.stem}.jpg")
-                output_dir.mkdir(parents=True, exist_ok=True)
-
-                self.log.info(
-                    f'Processing {str(idx).zfill(len(str(len(images))))}: "{img_input_path_rel}"'
-                )
-                if self.skip_existing and img_output_path_rel.is_file():
-                    self.log.warning("Already exists, skipping")
-                    if self.delete_input:
-                        img_path.unlink(missing_ok=True)
-                    progress.advance(task_resizing)
-                    continue
-
-                img = cv2.imread(str(img_path))
-                resized_img = self.resize_image(img)
-                self.save_image(resized_img, img_output_path_rel)
-
-                if self.delete_input:
-                    img_path.unlink(missing_ok=True)
-
+                self.process_image(img_path, idx, len(images))
                 progress.advance(task_resizing)
 
-    def resize_image(self, img: np.ndarray) -> np.ndarray:
-        height, width = img.shape[:2]
+    def process_image(self, img_path: Path, idx: int, total: int) -> None:
+        img_input_path_rel = img_path.relative_to(self.input)
+        output_dir = self.output.joinpath(img_input_path_rel).parent
+        img_output_path = output_dir.joinpath(img_path.name)
+        output_dir.mkdir(parents=True, exist_ok=True)
+
+        self.log.info(f'Processing {str(idx).zfill(len(str(total)))}: "{img_input_path_rel}"')
+        
+        if self.skip_existing and img_output_path.is_file():
+            self.log.warning("Already exists, skipping")
+            if self.delete_input:
+                img_path.unlink(missing_ok=True)
+            return
+
+        try:
+            image = Image.open(img_path).convert("RGB")
+            resized_image = self._resize_to_max_dimensions(image)
+            self._reduce_file_size_and_save(resized_image, img_output_path)
+
+            if self.delete_input:
+                img_path.unlink(missing_ok=True)
+
+            self.log.info(f"Image successfully resized and saved as {img_output_path}")
+        except Exception as e:
+            self.log.error(f"An error occurred while processing the image: {str(e)}")
+
+    def _resize_to_max_dimensions(self, image: Image.Image) -> Image.Image:
+        width, height = image.size
+        target_size = self._calculate_target_size(width, height)
+
+        if width > target_size[0] or height > target_size[1]:
+            return image.resize(target_size, Image.LANCZOS)
+        return image
+
+    def _calculate_target_size(self, width: int, height: int) -> Tuple[int, int]:
+        aspect_ratio = width / height
+        max_size = self.max_size_px
+
         if self.resize_mode == ResizeMode.LONGEST_EDGE:
             if width > height:
-                new_width = self.max_size_px
-                new_height = int(height * (self.max_size_px / width))
+                new_width = max_size
+                new_height = int(new_width / aspect_ratio)
             else:
-                new_height = self.max_size_px
-                new_width = int(width * (self.max_size_px / height))
+                new_height = max_size
+                new_width = int(new_height * aspect_ratio)
         elif self.resize_mode == ResizeMode.SHORTEST_EDGE:
             if width < height:
-                new_width = self.max_size_px
-                new_height = int(height * (self.max_size_px / width))
+                new_width = max_size
+                new_height = int(new_width / aspect_ratio)
             else:
-                new_height = self.max_size_px
-                new_width = int(width * (self.max_size_px / height))
+                new_height = max_size
+                new_width = int(new_height * aspect_ratio)
         elif self.resize_mode == ResizeMode.WIDTH:
-            new_width = self.max_size_px
-            new_height = int(height * (self.max_size_px / width))
+            new_width = max_size
+            new_height = int(new_width / aspect_ratio)
         else:  # ResizeMode.HEIGHT
-            new_height = self.max_size_px
-            new_width = int(width * (self.max_size_px / height))
+            new_height = max_size
+            new_width = int(new_height * aspect_ratio)
 
-        return cv2.resize(img, (new_width, new_height), interpolation=cv2.INTER_AREA)
+        return (new_width, new_height)
 
-    def save_image(self, img: np.ndarray, output_path: Path) -> None:
+    def _reduce_file_size_and_save(self, image: Image.Image, output_path: Path) -> None:
         quality = 95
         while True:
-            encode_param = [int(cv2.IMWRITE_JPEG_QUALITY), quality]
-            _, encoded_img = cv2.imencode(".jpg", img, encode_param)
-            if encoded_img.nbytes <= self.max_size_mb * 1024 * 1024:
+            image.save(output_path, format="JPEG", quality=quality)
+            if output_path.stat().st_size <= self.max_size_mb * 1024 * 1024:
                 break
             quality -= 5
             if quality < 20:
                 raise ValueError("Cannot reduce file size to the desired size.")
-
-        cv2.imwrite(str(output_path), img, encode_param)
 
 
 app = typer.Typer()
