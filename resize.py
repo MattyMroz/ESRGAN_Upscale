@@ -86,7 +86,7 @@ class Resize:
         output_dir.mkdir(parents=True, exist_ok=True)
 
         self.log.info(f'Processing {str(idx).zfill(len(str(total)))}: "{img_input_path_rel}"')
-        
+
         if self.skip_existing and img_output_path.is_file():
             self.log.warning("Already exists, skipping")
             if self.delete_input:
