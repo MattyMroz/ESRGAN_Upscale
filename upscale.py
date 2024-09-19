@@ -38,6 +38,7 @@ class AlphaOptions(str, Enum):
 
 class Upscale:
     model_str: str = None
+    grayscale_model: str = None
     input: Path = None
     output: Path = None
     reverse: bool = None
@@ -70,6 +71,7 @@ class Upscale:
     def __init__(
         self,
         model: str,
+        grayscale_model: str,
         input: Path,
         output: Path,
         reverse: bool = False,
@@ -88,6 +90,7 @@ class Upscale:
         log: logging.Logger = logging.getLogger(),
     ) -> None:
         self.model_str = model
+        self.grayscale_model = grayscale_model
         self.input = input.resolve()
         self.output = output.resolve()
         self.reverse = reverse
@@ -108,6 +111,26 @@ class Upscale:
             torch.set_default_tensor_type(
                 torch.HalfTensor if self.cpu else torch.cuda.HalfTensor
             )
+
+    def is_grayscale_or_bw(self, image, threshold=0.05, color_threshold=0.1):
+        if len(image.shape) == 2 or (len(image.shape) == 3 and image.shape[2] == 1):
+            return True
+
+        rgb = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+        r, g, b = rgb[:, :, 0], rgb[:, :, 1], rgb[:, :, 2]
+
+        diff_rg = np.abs(r - g)
+        diff_rb = np.abs(r - b)
+        diff_gb = np.abs(g - b)
+
+        if (np.mean(diff_rg) < threshold) and (np.mean(diff_rb) < threshold) and (np.mean(diff_gb) < threshold):
+            return True
+
+        hsv = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
+        if np.mean(hsv[:, :, 1]) < color_threshold * 255:
+            return True
+
+        return False
 
     def run(self) -> None:
         model_chain = (
@@ -227,6 +250,19 @@ class Upscale:
                 if len(img.shape) < 3:
                     img = cv2.cvtColor(img, cv2.COLOR_GRAY2BGR)
 
+                # Sprawdzamy, czy obraz jest czarno-biały lub w odcieniach szarości
+                is_grayscale = self.is_grayscale_or_bw(img)
+                
+                # Wybieramy odpowiedni model
+                current_model = self.grayscale_model if is_grayscale else self.model_str
+                
+                # Reszta kodu pozostaje bez zmian, ale używamy current_model zamiast self.model_str
+                model_chain = (
+                    current_model.split("+")
+                    if "+" in current_model
+                    else current_model.split(">")
+                )
+                
                 # Seamless modes
                 if self.seamless == SeamlessOptions.TILE:
                     img = cv2.copyMakeBorder(
@@ -506,6 +542,9 @@ app = typer.Typer()
 @app.command()
 def main(
     model: str = typer.Argument(...),
+    grayscale_model: str = typer.Option(
+        None, "--grayscale-model", "-gm", help="Model for grayscale images"
+    ),
     input: Path = typer.Option(
         Path("input"), "--input", "-i", help="Input folder"),
     output: Path = typer.Option(
@@ -597,6 +636,7 @@ def main(
 
     upscale = Upscale(
         model=model,
+        grayscale_model=grayscale_model,
         input=input,
         output=output,
         reverse=reverse,
