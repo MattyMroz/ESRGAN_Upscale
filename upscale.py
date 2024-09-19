@@ -7,7 +7,7 @@ from collections import OrderedDict
 from enum import Enum
 from pathlib import Path
 from typing import List, Optional, Union
-import warnings
+from warnings import catch_warnings, filterwarnings
 
 import cv2
 import numpy as np
@@ -368,8 +368,8 @@ class Upscale:
         return output
 
     def load_model(self, model_path: str):
-        with warnings.catch_warnings():
-            warnings.filterwarnings("ignore", category=FutureWarning)
+        with catch_warnings():
+            filterwarnings("ignore", category=FutureWarning)
             if model_path != self.last_model:
                 # interpolating OTF, example: 4xBox:25&4xPSNR:75
                 if (":" in model_path or "@" in model_path) and (
