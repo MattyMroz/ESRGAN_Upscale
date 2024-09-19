@@ -250,15 +250,18 @@ class Upscale:
                 if len(img.shape) < 3:
                     img = cv2.cvtColor(img, cv2.COLOR_GRAY2BGR)
 
-                # Model for grayscale or bw images
+                # Sprawdzamy, czy obraz jest czarno-biały lub w odcieniach szarości
                 is_grayscale = self.is_grayscale_or_bw(img)
 
+                # Wybieramy odpowiedni model
                 current_model = self.grayscale_model if is_grayscale else self.model_str
 
-                self.log.info(
-                    f"Using model: {current_model} for image: {img_path.name}")
-
-                self.load_model(current_model)
+                # Reszta kodu pozostaje bez zmian, ale używamy current_model zamiast self.model_str
+                model_chain = (
+                    current_model.split("+")
+                    if "+" in current_model
+                    else current_model.split(">")
+                )
 
                 # Seamless modes
                 if self.seamless == SeamlessOptions.TILE:
@@ -365,7 +368,6 @@ class Upscale:
 
     def load_model(self, model_path: str):
         if model_path != self.last_model:
-            self.log.info(f"Loading model: {model_path}")
             # interpolating OTF, example: 4xBox:25&4xPSNR:75
             if (":" in model_path or "@" in model_path) and (
                 "&" in model_path or "|" in model_path
