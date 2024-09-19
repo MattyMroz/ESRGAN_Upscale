@@ -382,7 +382,7 @@ class Upscale:
                         int(interps[1].split("@")[1]) / 100
                     ) * v_2
             else:
-                state_dict = torch.load(model_path)
+                state_dict = torch.load(model_path, weights_only=True)
 
             # SRVGGNet Real-ESRGAN (v2)
             if (
