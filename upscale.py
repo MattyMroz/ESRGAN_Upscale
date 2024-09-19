@@ -7,6 +7,7 @@ from collections import OrderedDict
 from enum import Enum
 from pathlib import Path
 from typing import List, Optional, Union
+import warnings
 
 import cv2
 import numpy as np
@@ -367,55 +368,57 @@ class Upscale:
         return output
 
     def load_model(self, model_path: str):
-        if model_path != self.last_model:
-            # interpolating OTF, example: 4xBox:25&4xPSNR:75
-            if (":" in model_path or "@" in model_path) and (
-                "&" in model_path or "|" in model_path
-            ):
-                interps = model_path.split("&")[:2]
-                model_1 = torch.load(interps[0].split("@")[0])
-                model_2 = torch.load(interps[1].split("@")[0])
-                state_dict = OrderedDict()
-                for k, v_1 in model_1.items():
-                    v_2 = model_2[k]
-                    state_dict[k] = (int(interps[0].split("@")[1]) / 100) * v_1 + (
-                        int(interps[1].split("@")[1]) / 100
-                    ) * v_2
-            else:
-                state_dict = torch.load(model_path)
+        with warnings.catch_warnings():
+            warnings.filterwarnings("ignore", category=FutureWarning)
+            if model_path != self.last_model:
+                # interpolating OTF, example: 4xBox:25&4xPSNR:75
+                if (":" in model_path or "@" in model_path) and (
+                    "&" in model_path or "|" in model_path
+                ):
+                    interps = model_path.split("&")[:2]
+                    model_1 = torch.load(interps[0].split("@")[0])
+                    model_2 = torch.load(interps[1].split("@")[0])
+                    state_dict = OrderedDict()
+                    for k, v_1 in model_1.items():
+                        v_2 = model_2[k]
+                        state_dict[k] = (int(interps[0].split("@")[1]) / 100) * v_1 + (
+                            int(interps[1].split("@")[1]) / 100
+                        ) * v_2
+                else:
+                    state_dict = torch.load(model_path)
 
-            # SRVGGNet Real-ESRGAN (v2)
-            if (
-                "params" in state_dict.keys()
-                and "body.0.weight" in state_dict["params"].keys()
-            ):
-                self.model = RealESRGANv2(state_dict)
-                self.last_in_nc = self.model.num_in_ch
-                self.last_out_nc = self.model.num_out_ch
-                self.last_nf = self.model.num_feat
-                self.last_nb = self.model.num_conv
-                self.last_scale = self.model.scale
-                self.last_model = model_path
-            # SPSR (ESRGAN with lots of extra layers)
-            elif "f_HR_conv1.0.weight" in state_dict:
-                self.model = SPSR(state_dict)
-                self.last_in_nc = self.model.in_nc
-                self.last_out_nc = self.model.out_nc
-                self.last_nf = self.model.num_filters
-                self.last_nb = self.model.num_blocks
-                self.last_scale = self.model.scale
-                self.last_model = model_path
-            # Regular ESRGAN, "new-arch" ESRGAN, Real-ESRGAN v1
-            else:
-                self.model = ESRGAN(state_dict)
-                self.last_in_nc = self.model.in_nc
-                self.last_out_nc = self.model.out_nc
-                self.last_nf = self.model.num_filters
-                self.last_nb = self.model.num_blocks
-                self.last_scale = self.model.scale
-                self.last_model = model_path
+                # SRVGGNet Real-ESRGAN (v2)
+                if (
+                    "params" in state_dict.keys()
+                    and "body.0.weight" in state_dict["params"].keys()
+                ):
+                    self.model = RealESRGANv2(state_dict)
+                    self.last_in_nc = self.model.num_in_ch
+                    self.last_out_nc = self.model.num_out_ch
+                    self.last_nf = self.model.num_feat
+                    self.last_nb = self.model.num_conv
+                    self.last_scale = self.model.scale
+                    self.last_model = model_path
+                # SPSR (ESRGAN with lots of extra layers)
+                elif "f_HR_conv1.0.weight" in state_dict:
+                    self.model = SPSR(state_dict)
+                    self.last_in_nc = self.model.in_nc
+                    self.last_out_nc = self.model.out_nc
+                    self.last_nf = self.model.num_filters
+                    self.last_nb = self.model.num_blocks
+                    self.last_scale = self.model.scale
+                    self.last_model = model_path
+                # Regular ESRGAN, "new-arch" ESRGAN, Real-ESRGAN v1
+                else:
+                    self.model = ESRGAN(state_dict)
+                    self.last_in_nc = self.model.in_nc
+                    self.last_out_nc = self.model.out_nc
+                    self.last_nf = self.model.num_filters
+                    self.last_nb = self.model.num_blocks
+                    self.last_scale = self.model.scale
+                    self.last_model = model_path
 
-            del state_dict
+                del state_dict
         self.model.eval()
         for k, v in self.model.named_parameters():
             v.requires_grad = False
