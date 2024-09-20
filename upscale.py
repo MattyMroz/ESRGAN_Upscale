@@ -171,7 +171,7 @@ class Upscale:
             self.output.mkdir(parents=True)
 
         print(
-            'Model{:s}: "{:s}"'.format(
+            'Model{:s}:\n"{:s}"'.format(
                 "s" if len(model_chain) > 1 else "",
                 # ", ".join([Path(x).stem for x in model_chain]),
                 ", ".join([x for x in model_chain]),
@@ -182,7 +182,7 @@ class Upscale:
             grayscale_model_chain = self.grayscale_model.split(
                 "+") if "+" in self.grayscale_model else [self.grayscale_model]
             print(
-                'Grayscale Model{:s}: "{:s}"'.format(
+                'Grayscale Model{:s}:\n"{:s}"'.format(
                     "s" if len(grayscale_model_chain) > 1 else "",
                     ", ".join([self.__check_model_path(x)
                                for x in grayscale_model_chain]),
