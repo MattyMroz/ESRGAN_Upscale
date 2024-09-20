@@ -170,14 +170,6 @@ class Upscale:
         elif not self.output.exists():
             self.output.mkdir(parents=True)
 
-        print(
-            'Model{:s}: "{:s}"'.format(
-                "s" if len(model_chain) > 1 else "",
-                # ", ".join([Path(x).stem for x in model_chain]),
-                ", ".join([x for x in model_chain]),
-            )
-        )
-
         images: List[Path] = []
         # List of extensions: https://docs.opencv.org/4.x/d4/da8/group__imgcodecs.html#ga288b8b3da0892bd651fce07b3bbd3a56
         # Also gif and tga which seem to be supported as well though are undocumented.
@@ -264,6 +256,13 @@ class Upscale:
                     else current_model.split(">")
                 )
 
+                print(
+                    'Model{:s}: "{:s}"'.format(
+                        "s" if len(model_chain) > 1 else "",
+                        # ", ".join([Path(x).stem for x in model_chain]),
+                        ", ".join([x for x in model_chain]),
+                    )
+                )
                 # Seamless modes
                 if self.seamless == SeamlessOptions.TILE:
                     img = cv2.copyMakeBorder(
