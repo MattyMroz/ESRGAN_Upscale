@@ -262,13 +262,10 @@ class Upscale:
                 if len(img.shape) < 3:
                     img = cv2.cvtColor(img, cv2.COLOR_GRAY2BGR)
 
-                # Sprawdzamy, czy obraz jest czarno-biały lub w odcieniach szarości
                 is_grayscale = self.is_grayscale_or_bw(img)
 
-                # Wybieramy odpowiedni model
                 current_model = self.grayscale_model if is_grayscale else self.model_str
 
-                # Reszta kodu pozostaje bez zmian, ale używamy current_model zamiast self.model_str
                 model_chain = (
                     current_model.split("+")
                     if "+" in current_model
